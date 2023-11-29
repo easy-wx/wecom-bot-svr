@@ -1,15 +1,13 @@
-import app
+import wecom_bot_svr
 
 
 def main():
-    # token = "xxxxxxx"
-    # aes_key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-    token = "hJqcu3uJ9Tn2gXPmxx2w9kkCkCE2EPYo"
-    aes_key = "6qkdMrq68nTKduznJYO1A37W2oEgpkMUvkttRToqhUt"
+    token = "xxxxxxx"
+    aes_key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
     corp_id = ""
     host = "0.0.0.0"
     port = 5001
-    server = app.WecomBotServer("wecom_bot", host, port, token=token, aes_key=aes_key, corp_id=corp_id)
+    server = wecom_bot_svr.Server("wecom_bot", host, port, token=token, aes_key=aes_key, corp_id=corp_id)
 
     def msg_handler(user_info, msg_type, content, xml_tree):
         print(user_info, msg_type, content)

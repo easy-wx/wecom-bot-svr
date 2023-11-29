@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[project]
+name = "wecom_bot_svr"
+version = "0.0.3"
+authors = [
+    { name = "panzhongxian", email = "panzhongxian0532@gmail.com" },
+]
+description = "WeCom Bot Callback Server Simple Framework"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/panzhongxian/wecom-bot-svr"
+Issues = "https://github.com/panzhongxian/wecom-bot-svr/issues"
