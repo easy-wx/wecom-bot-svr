@@ -13,7 +13,7 @@
 ### 2.1 安装
 
 ```bash
-python3 -m pip intall wecom_bot_svr
+python3 -m pip install wecom_bot_svr
 ```
 
 ### 2.1 配置回调相关参数
