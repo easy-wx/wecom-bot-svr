@@ -1,7 +1,7 @@
 import os
 from flask import Flask, request
 
-from WXBizMsgCrypt3 import WXBizMsgCrypt
+from .WXBizMsgCrypt3 import WXBizMsgCrypt
 import xml.etree.cElementTree as ET
 
 
