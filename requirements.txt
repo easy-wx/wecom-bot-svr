@@ -1,2 +1,0 @@
-Flask==3.0.0
-pycryptodome==3.19.0

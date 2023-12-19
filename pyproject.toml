@@ -19,7 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "Flask>=3.0.0",
-    "wx-crypt>=0.0.1",
+    "wx-crypt>=0.0.2",
 ]
 
 [project.urls]
