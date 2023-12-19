@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 
 [project]
-name = "wecom_bot_svr"
-version = "0.0.2"
+name = "wecom-bot-svr"
+version = "0.1.0"
 authors = [
     { name = "panzhongxian", email = "panzhongxian0532@gmail.com" },
 ]
@@ -17,11 +17,11 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-install-requires = [
-    "Flask==3.0.0",
-    "pycryptodome==3.19.0",
+dependencies = [
+    "Flask>=3.0.0",
+    "wx-crypt>=0.0.1",
 ]
 
 [project.urls]
-Homepage = "https://github.com/panzhongxian/wecom-bot-svr"
-Issues = "https://github.com/panzhongxian/wecom-bot-svr/issues"
+Homepage = "https://github.com/easy-wx/wecom-bot-svr"
+Issues = "https://github.com/easy-wx/wecom-bot-svr/issues"

@@ -1,7 +1,7 @@
 import os
 from flask import Flask, request
 
-from .WXBizMsgCrypt3 import WXBizMsgCrypt
+from wx_crypt import WXBizMsgCrypt, WxChannel_Wecom
 import xml.etree.cElementTree as ET
 
 
@@ -67,7 +67,7 @@ class WecomBotServer(object):
         self._app.run(host=self.host, port=self.port)
 
     def get_crypto_obj(self):
-        return WXBizMsgCrypt(self._token, self._aes_key, self._corp_id)
+        return WXBizMsgCrypt(self._token, self._aes_key, self._corp_id, channel=WxChannel_Wecom)
 
     def handle_bot_call_get(self):
         # 获取请求参数
