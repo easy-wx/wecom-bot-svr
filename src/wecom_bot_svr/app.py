@@ -34,7 +34,7 @@ class WecomBotServer(object):
         self.path = path
         self._token = token if token is not None else os.getenv("WX_BOT_TOKEN")
         self._aes_key = aes_key if aes_key is not None else os.getenv("WX_BOT_AES_KEY")
-        self._corp_id = corp_id if corp_id is not None else os.getenv("WX_BOT_CORP_ID")
+        self._corp_id = corp_id if corp_id is not None else os.getenv("WX_BOT_CORP_ID", default="")
         self._app = Flask(name)
         self._message_handler = None
         self._event_handler = None

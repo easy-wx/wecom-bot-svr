@@ -1,6 +1,6 @@
 FROM docker.io/panzhongxian/wecom-bot-svr
 
-RUN python3 -m pip install -i https://test.pypi.org/simple/ wecom-bot-svr==0.1.11
+RUN python3 -m pip install wecom-bot-svr==0.2.1
 
 COPY *.py /data/code/
 
