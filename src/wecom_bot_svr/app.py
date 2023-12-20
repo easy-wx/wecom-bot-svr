@@ -1,18 +1,13 @@
+import logging
 import os
 from flask import Flask, request
+from .req_msg import ReqMsg
 
 from wx_crypt import WXBizMsgCrypt, WxChannel_Wecom
 import xml.etree.cElementTree as ET
 
 
 # 参考文档：https://km.woa.com/articles/show/387107?kmref=search&from_page=1&no=2#10128
-
-class UserInfo(object):
-    def __init__(self, en_name, cn_name, user_id, chat_id=None):
-        self.en_name = en_name
-        self.cn_name = cn_name
-        self.user_id = user_id
-        self.chat_id = chat_id
 
 
 def _encode_rsp(wx_cpt, rsp_str):
@@ -33,7 +28,7 @@ def _encode_rsp(wx_cpt, rsp_str):
 
 
 class WecomBotServer(object):
-    def __init__(self, name, host, port, path="/wx_bot_cb", token=None, aes_key=None, corp_id=None):
+    def __init__(self, name, host, port, path, token=None, aes_key=None, corp_id=None):
         self.host = host
         self.port = port
         self.path = path
@@ -44,6 +39,8 @@ class WecomBotServer(object):
         self._message_handler = None
         self._event_handler = None
         self._error_handler = None
+        self.name = name
+        self.logger = logging.getLogger()
 
     def set_message_handler(self, handler):
         self._message_handler = handler
@@ -92,7 +89,7 @@ class WecomBotServer(object):
 
         # 解密出明文的echostr
         ret, msg = wx_cpt.DecryptMsg(request.data, msg_signature, timestamp, nonce)
-        print(msg)
+        self.logger.info(f"decrypted msg: {msg.decode()}")
         if ret != 0:
             if self._error_handler:
                 self._error_handler(ret)
@@ -102,20 +99,16 @@ class WecomBotServer(object):
 
         # 解密后的数据是xml格式，用python的标准库xml.etree.cElementTree可以解析
         xml_tree = ET.fromstring(msg)
-        user = xml_tree.find('From')
-        user_info = UserInfo(user.find('Alias').text, user.find('Name').text, user.find('UserId').text)
-        msg_type = xml_tree.find('MsgType').text
-        if msg_type == 'event':
-            event_type = xml_tree.find('Event').find('EventType').text
-            rsp_str = self._event_handler(user_info, event_type, xml_tree)
-        elif msg_type == 'text':
-            content = xml_tree.find('Text').find('Content').text
-            if xml_tree.find("ChatType").text == "group":
-                content = content.replace("@ugc", "").strip()
-            chat_id = xml_tree.find("ChatId").text
-            if chat_id:
-                user_info.chat_id = chat_id
-            rsp_str = self._message_handler(user_info, msg_type, content, xml_tree)
-        else:
-            rsp_str = ""
-        return _encode_rsp(wx_cpt, rsp_str)
+        msg = ReqMsg.create_msg(xml_tree)
+        if msg.msg_type == 'event':
+            rsp_msg = self._event_handler(msg)
+        else:  # 消息
+            if msg.msg_type == 'text' and msg.chat_type == 'group':
+                msg.content = msg.content.replace(f"@{self.name}", "")
+            rsp_msg = self._message_handler(msg)
+
+        nonce = params.get("nonce")
+        ret, rsp = wx_cpt.EncryptMsg(rsp_msg.dump_xml(), nonce, timestamp)
+        if ret != 0:
+            print("err: encrypt fail: " + str(ret))
+        return rsp
