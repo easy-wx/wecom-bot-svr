@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from wecom_bot_svr import app, RspTextMsg, RspMarkdownMsg
+from wecom_bot_svr import WecomBotServer, RspTextMsg, RspMarkdownMsg
 
 
 def help_md():
@@ -42,7 +42,7 @@ def main():
     port = 5001
     # 这里要跟机器人名字一样，用于切分群组聊天中的@消息
     bot_name = 'jasonzxpan-test'
-    server = app.WecomBotServer(bot_name, host, port, path='/wecom_bot', token=token, aes_key=aes_key, corp_id=corp_id)
+    server = WecomBotServer(bot_name, host, port, path='/wecom_bot', token=token, aes_key=aes_key, corp_id=corp_id)
 
     server.set_message_handler(msg_handler)
     server.set_event_handler(event_handler)
