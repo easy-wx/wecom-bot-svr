@@ -1,5 +1,7 @@
 # 企业微信机器人回调服务
 
+如果项目能给你带来些许便利，请不吝 Star
+
 ## 1. 介绍
 
 本项目是一个基于 [Flask](https://flask.palletsprojects.com/en/1.1.x/)的**企业微信机器人回调功能的接口服务简单框架**
@@ -104,4 +106,5 @@ server = app.WecomBotServer(bot_name, host, port, path='/wecom_bot')
 ## 5. TODO
 
 - 单独启一个端口，接收主动发送消息的触发，然后让机器人在对应的群聊里发送消息
+- 增加默认权限支持
 
