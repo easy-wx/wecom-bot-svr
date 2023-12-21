@@ -1,8 +1,7 @@
 import logging
 import sys
 
-from wecom_bot_svr import app
-from wecom_bot_svr.rsp_msg import RspTextMsg, RspMarkdownMsg
+from wecom_bot_svr import app, RspTextMsg, RspMarkdownMsg
 
 
 def help_md():
