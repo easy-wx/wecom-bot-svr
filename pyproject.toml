@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wecom-bot-svr"
-version = "0.2.3"
+version = "0.3.0"
 authors = [
     { name = "panzhongxian", email = "panzhongxian0532@gmail.com" },
 ]

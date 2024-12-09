@@ -1,10 +1,13 @@
+import inspect
 import logging
 import os
-from flask import Flask, request
-from .req_msg import ReqMsg
-
-from wx_crypt import WXBizMsgCrypt, WxChannel_Wecom
 import xml.etree.cElementTree as ET
+
+import requests
+from flask import Flask, request
+from wx_crypt import WXBizMsgCrypt, WxChannel_Wecom
+
+from .req_msg import ReqMsg
 
 
 # 参考文档：https://km.woa.com/articles/show/387107?kmref=search&from_page=1&no=2#10128
@@ -28,10 +31,11 @@ def _encode_rsp(wx_cpt, rsp_str):
 
 
 class WecomBotServer(object):
-    def __init__(self, name, host, port, path, token=None, aes_key=None, corp_id=None):
+    def __init__(self, name, host, port, path, token=None, aes_key=None, corp_id=None, bot_key=None):
         self.host = host
         self.port = port
         self.path = path
+        self._bot_key = bot_key if bot_key is not None else os.getenv("WX_BOT_KEY")
         self._token = token if token is not None else os.getenv("WX_BOT_TOKEN")
         self._aes_key = aes_key if aes_key is not None else os.getenv("WX_BOT_AES_KEY")
         self._corp_id = corp_id if corp_id is not None else os.getenv("WX_BOT_CORP_ID", default="")
@@ -105,10 +109,52 @@ class WecomBotServer(object):
         else:  # 消息
             if msg.msg_type == 'text' and msg.chat_type == 'group':
                 msg.content = msg.content.replace(f"@{self.name}", "")
-            rsp_msg = self._message_handler(msg)
+            if len(inspect.signature(self._message_handler).parameters) == 2:
+                rsp_msg = self._message_handler(msg, self)
+            else:  # 兼容旧版本
+                rsp_msg = self._message_handler(msg)
 
         nonce = params.get("nonce")
         ret, rsp = wx_cpt.EncryptMsg(rsp_msg.dump_xml(), nonce, timestamp)
         if ret != 0:
             print("err: encrypt fail: " + str(ret))
         return rsp
+
+    def upload_file(self, filename):
+        # 文件路径
+        file_path = 'output.csv'
+
+        try:
+            # 打开文件并上传
+            with open(file_path, 'rb') as file:
+                files = {'file': (filename, file)}
+                response = requests.post(
+                    url=f'https://qyapi.weixin.qq.com/cgi-bin/webhook/upload_media?key={self._bot_key}&type=file',
+                    files=files)
+                # 检查响应
+                if response.status_code != 200 and response.json().get("errcode") == 0:
+                    return None
+                return response.json()['media_id']
+        except:
+            return None
+
+    def send_file(self, chat_id, file_path):
+        media_id = self.upload_file(file_path)
+        if media_id is None:
+            return "上传文件失败"
+        try:
+            r = requests.post(
+                url=f'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={self._bot_key}',
+                json={
+                    "chatid": chat_id,
+                    "msgtype": "file",
+                    "file": {
+                        "media_id": media_id
+                    }
+                })
+            if r.status_code == 200 and r.json().get("errcode") == 0:
+                return "发送文件成功"
+            else:
+                return "发送文件失败"
+        except:
+            return "发送文件失败"

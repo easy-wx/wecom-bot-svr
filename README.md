@@ -2,6 +2,8 @@
 
 如果项目能给你带来些许便利，请不吝 Star
 
+2024-12-09 新增发送主动文件功能(可以由消息触发)
+
 ## 1. 介绍
 
 本项目是一个基于 [Flask](https://flask.palletsprojects.com/en/1.1.x/)的**企业微信机器人回调功能的接口服务简单框架**
@@ -42,8 +44,6 @@ docker push docker.io/panzhongxian/wecom-bot-svr-demo:latest
 然后在对应的平台中选择镜像部署，配置好对应的域名，即可获得在后续步骤中需要的回调地址。
 
 如果你需要跟别的服务部署在一起，或者直接在CVM的机器上启动，在运行之前，记得安装 `wecom-bot-svr` 即可
-
-
 
 ### 2.3 配置企业微信群机器人
 
@@ -101,9 +101,35 @@ server = app.WecomBotServer(bot_name, host, port, path='/wecom_bot')
 
 机器人发送消息只有两种形式，一种是 Text，另外一种是 Markdown，定义在 rsp_msg.py 文件当中。两种消息都只需要填写 content 内容即可。
 
+## 5. 发送文件
 
+![send_file](images/send_file.png)
 
-## 5. TODO
+原理链接：<https://developer.work.weixin.qq.com/document/path/91770#%E6%96%87%E4%BB%B6%E7%B1%BB%E5%9E%8B>
+
+将上述上传文件、发送文件进行了封装，作为 WecomBotServer 的一个方法，可以被调用。
+
+可以在消息处理函数中，通过调用 `send_file(chat_id, file_path)` 方法，将文件发送到群聊中。
+
+当然，你也可以通过其他方式，调用该函数主动发送。
+
+这里需要在构造函数中，增加传入 `bot_key`，用于发送文件的权限校验。这个key是在 WebHook 的链接中可以查询到：
+
+![webhook_key.png](images%2Fwebhook_key.png)
+
+同时，你需要加在消息处理函数的参数中，增加 `server` 参数，用于调用发送文件的方法。
+
+```python
+def msg_handler(req_msg: ReqMsg, server: WecomBotServer):
+    ...
+    # 生成文件、发送文件可以新启线程异步处理
+    with open('output.txt', 'w') as f:
+        f.write("This is a test file. Welcome to star easy-wx/wecom-bot-svr!")
+    server.send_file(req_msg.chat_id, 'output.txt')
+    return RspTextMsg()  # 不发送消息，只回复文件
+```
+
+## 6. TODO
 
 - 单独启一个端口，接收主动发送消息的触发，然后让机器人在对应的群聊里发送消息
 - 增加默认权限支持
