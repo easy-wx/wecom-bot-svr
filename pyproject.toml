@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wecom-bot-svr"
-version = "0.3.0"
+version = "0.3.1"
 authors = [
     { name = "panzhongxian", email = "panzhongxian0532@gmail.com" },
 ]
@@ -17,6 +17,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "requests>=2.32.3",
     "Flask>=3.0.0",
     "wx-crypt>=0.0.2",
 ]
