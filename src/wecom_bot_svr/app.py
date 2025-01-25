@@ -120,10 +120,8 @@ class WecomBotServer(object):
             print("err: encrypt fail: " + str(ret))
         return rsp
 
-    def upload_file(self, filename):
-        # 文件路径
-        file_path = 'output.csv'
-
+    def upload_file(self, file_path):
+        filename = os.path.basename(file_path)
         try:
             # 打开文件并上传
             with open(file_path, 'rb') as file:
