@@ -153,8 +153,13 @@ print(response.text)
 
 ![active_send](https://github.com/easy-wx/wecom-bot-svr/raw/main/images/active_send.png)
 
+![active_send](https://github.com/easy-wx/wecom-bot-svr/raw/main/images/active_send_group.png)
 
 ## 7. TODO
 
 - 增加默认权限支持
 
+
+## 8. Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=easy-wx/wecom-bot-svr&type=Date)](https://star-history.com/#easy-wx/wecom-bot-svr&Date)
