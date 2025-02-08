@@ -136,23 +136,55 @@ class WecomBotServer(object):
         except:
             return None
 
+    def proactively_send(self, chat_id, msg_type, msg_type_name, msg_data):
+        """"""
+        try:
+            payload = {
+                "chatid": chat_id,
+                "msgtype": msg_type,
+            }
+            payload.update(msg_data)
+
+            r = requests.post(url=f'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={self._bot_key}',
+                              json=payload)
+            if r.status_code == 200 and r.json().get("errcode") == 0:
+                return f"发送{msg_type_name}成功"
+            else:
+                return f"发送{msg_type_name}失败"
+        except:
+            return f"发送{msg_type_name}失败"
+
     def send_file(self, chat_id, file_path):
         media_id = self.upload_file(file_path)
         if media_id is None:
             return "上传文件失败"
-        try:
-            r = requests.post(
-                url=f'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={self._bot_key}',
-                json={
-                    "chatid": chat_id,
-                    "msgtype": "file",
-                    "file": {
-                        "media_id": media_id
-                    }
-                })
-            if r.status_code == 200 and r.json().get("errcode") == 0:
-                return "发送文件成功"
-            else:
-                return "发送文件失败"
-        except:
-            return "发送文件失败"
+
+        return self.proactively_send(chat_id, "file", "文件", {"file": {"media_id": media_id}})
+
+    def send_markdown(self, chat_id, content):
+        return self.proactively_send(chat_id, "markdown", "Markdown", {"markdown": {"content": content}})
+
+    def send_text(self, chat_id, content, mentioned_list=None, mentioned_mobile_list=None):
+        msg_data = {
+            "text": {
+                "content": content,
+            }
+        }
+        if mentioned_list is not None:
+            msg_data["text"]["mentioned_list"] = mentioned_list
+        if mentioned_mobile_list is not None:
+            msg_data["text"]["mentioned_mobile_list"] = mentioned_mobile_list
+        return self.proactively_send(chat_id, "text", "文本", msg_data)
+
+    def send_encoded_image(self, chat_id, base64_image_data, md5):
+        return self.proactively_send(chat_id, "image", "图片", {"image": {"base64": base64_image_data, "md5": md5}})
+
+    def send_news(self, chat_id, title, description, url, pic_url):
+        return self.proactively_send(chat_id, "news", "图文", {"news": {"articles": [
+            {
+                "title": title,
+                "description": description,
+                "url": url,
+                "picurl": pic_url
+            }
+        ]}})
