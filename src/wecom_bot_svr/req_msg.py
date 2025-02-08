@@ -5,6 +5,9 @@ class UserInfo(object):
         self.cn_name = cn_name
         self.user_id = user_id
 
+    def __str__(self):
+        return f"en_name: {self.en_name}, cn_name: {self.cn_name}, user_id: {self.user_id}"
+
 
 class ReqMsg(object):
     def __init__(self, xml_tree):
