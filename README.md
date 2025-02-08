@@ -3,6 +3,7 @@
 如果项目能给你带来些许便利，请不吝 Star
 
 - 2024-12-09 新增发送主动文件功能(可以由消息触发)
+- 2025-02-08 新增主动发送消息服务(本地网络POST触发)
 
 ## 1. 介绍
 
@@ -49,7 +50,7 @@ docker push docker.io/panzhongxian/wecom-bot-svr-demo:latest
 
 找一个群，在右上角点击「...」，点击「添加群机器人」，点击「接收消息配置」， 这里对应 demo 我们填入回调地址、token、AESKey。
 
-<img src="images/new_wecom_bot.png" alt="new_wecom_bot" style="zoom:33%;" />
+<img src="https://github.com/easy-wx/wecom-bot-svr/raw/main/images/new_wecom_bot.png" alt="new_wecom_bot" style="zoom:33%;" />
 
 如果服务正常，这里将会保存成功；如果服务异常，这里会提示失败。
 
@@ -57,23 +58,23 @@ docker push docker.io/panzhongxian/wecom-bot-svr-demo:latest
 
 在添加到群中之后，可以在群中发送消息。demo里有**实现 help 和普通消息的回复**功能:
 
-<img src="images/add_wecom_bot.png" alt="add_wecom_bot" style="zoom:50%;" />
+<img src="https://github.com/easy-wx/wecom-bot-svr/raw/main/images/add_wecom_bot.png" alt="add_wecom_bot" style="zoom:50%;" />
 
 也可以移除再添加，这里展示的是**加入群的事件触发消息发送**的功能:
 
-<img src="images/wecom_bot_join.png" alt="wecom_bot_join" style="zoom:50%;" />
+<img src="https://github.com/easy-wx/wecom-bot-svr/raw/main/images/wecom_bot_join.png" alt="wecom_bot_join" style="zoom:50%;" />
 
 ### 2.5 发布到公司
 
 查看机器人资料，有一个发布到公司的按钮，只有发布之后的机器人，才能被公司其他同事搜索到，才可以被添加到其他的群聊当中：
 
-<img src="images/publish_wecom_bot.png" alt="publish_wecom_bot" style="zoom:50%;" />
+<img src="https://github.com/easy-wx/wecom-bot-svr/raw/main/images/publish_wecom_bot.png" alt="publish_wecom_bot" style="zoom:50%;" />
 
 ## 3. Token和AESKey的管理
 
 为了方便，demo中直接使用固定的 Token 和 AESKey，实际使用中，建议直接利用机器人配置页面的**随机生成**按钮获得。
 
-<img src="images/random_token_1.png" alt="random_token_1" style="zoom:50%;" />
+<img src="https://github.com/easy-wx/wecom-bot-svr/raw/main/images/random_token_1.png" alt="random_token_1" style="zoom:50%;" />
 
 删除代码中传入的 token 和 key，直接将其以配置的方式传入到服务中即可(
 三个环境变量 `WX_BOT_TOKEN`, `WX_BOT_AES_KEY`, `WX_BOT_CORP_ID`):
@@ -82,7 +83,7 @@ docker push docker.io/panzhongxian/wecom-bot-svr-demo:latest
 server = app.WecomBotServer(bot_name, host, port, path='/wecom_bot')
 ```
 
-<img src="images/random_token_2.png" alt="random_token_2" style="zoom:50%;" />
+<img src="https://github.com/easy-wx/wecom-bot-svr/raw/main/images/random_token_2.png" alt="random_token_2" style="zoom:50%;" />
 
 ## 4. demo.py 代码解析
 
@@ -103,7 +104,7 @@ server = app.WecomBotServer(bot_name, host, port, path='/wecom_bot')
 
 ## 5. 发送文件
 
-![send_file](images/send_file.png)
+![send_file](https://github.com/easy-wx/wecom-bot-svr/raw/main/images/send_file.png)
 
 原理链接：<https://developer.work.weixin.qq.com/document/path/91770#%E6%96%87%E4%BB%B6%E7%B1%BB%E5%9E%8B>
 
@@ -129,8 +130,31 @@ def msg_handler(req_msg: ReqMsg, server: WecomBotServer):
     return RspTextMsg()  # 不发送消息，只回复文件
 ```
 
-## 6. TODO
+## 6. 主动触发消息发送
 
-- 单独启一个端口，接收主动发送消息的触发，然后让机器人在对应的群聊里发送消息
+单独启动了一个路由（默认为 ``/active_send``），用于接收主动发送消息的触发。
+
+这样做的好处是**可以隔离机器人消息管理和其他需要发送消息的应用**，解耦**消息发送逻辑**和**消息内容组织与触发的逻辑**。
+
+考虑到安全性，该路由只处理本地网络的 POST 请求，外网请求会直接返回错误。默认的路由，可以通过路径来指定。
+
+```python
+import requests
+
+url = "http://127.0.0.1:5001/active_send"
+data = {"msg_type": "text", "chat_id": "12345", "content": "主动消息推送测试"}
+
+response = requests.post(url, data=data)
+
+print(response.text)
+```
+
+以上代码中 `chat_id`，如果给个人发送则是其ID，如果是群发，则是群的ID。
+
+![active_send](https://github.com/easy-wx/wecom-bot-svr/raw/main/images/active_send.png)
+
+
+## 7. TODO
+
 - 增加默认权限支持
 

@@ -31,10 +31,23 @@ def _encode_rsp(wx_cpt, rsp_str):
 
 
 class WecomBotServer(object):
-    def __init__(self, name, host, port, path, token=None, aes_key=None, corp_id=None, bot_key=None):
+    def __init__(self, name, host, port, path, token=None, aes_key=None, corp_id=None, bot_key=None,
+                 active_msg_path="/active_send"):
+        """
+        :param name:
+        :param host:
+        :param port:
+        :param path:
+        :param token:
+        :param aes_key:
+        :param corp_id:
+        :param bot_key:
+        :param active_msg_path: 主动发送消息的路径
+        """
         self.host = host
         self.port = port
         self.path = path
+        self.active_msg_path = active_msg_path
         self._bot_key = bot_key if bot_key is not None else os.getenv("WX_BOT_KEY")
         self._token = token if token is not None else os.getenv("WX_BOT_TOKEN")
         self._aes_key = aes_key if aes_key is not None else os.getenv("WX_BOT_AES_KEY")
@@ -65,7 +78,41 @@ class WecomBotServer(object):
             raise Exception("event handler is not set")
         self._app.get(self.path)(self.handle_bot_call_get)
         self._app.post(self.path)(self.handle_bot_call_post)
+        self._app.post(self.active_msg_path)(self.handle_active_send)
         self._app.run(host=self.host, port=self.port)
+
+    def handle_active_send(self):
+        # 避免外网直接访问：判断来源IP如果非本地地址，直接返回
+        if request.remote_addr != "127.0.0.1":
+            return "Invalid request"
+
+        # 获取请求参数
+        params = request.values
+        msg_type = params.get("msg_type")
+        chat_id = params.get("chat_id")
+        if msg_type == "file":
+            file_path = params.get("file_path")
+            send_ret = self.send_file(chat_id, file_path)
+        elif msg_type == "markdown":
+            content = params.get("content")
+            send_ret = self.send_markdown(chat_id, content)
+        elif msg_type == "text":
+            content = params.get("content")
+            send_ret = self.send_text(chat_id, content)
+        elif msg_type == "image":
+            base64_image_data = params.get("base64_image_data")
+            md5 = params.get("md5")
+            send_ret = self.send_encoded_image(chat_id, base64_image_data, md5)
+        elif msg_type == "news":
+            title = params.get("title")
+            description = params.get("description")
+            url = params.get("url")
+            pic_url = params.get("pic_url")
+            send_ret = self.send_news(chat_id, title, description, url, pic_url)
+        else:
+            return "Invalid msg_type"
+
+        return "发送消息结果：" + send_ret
 
     def get_crypto_obj(self):
         return WXBizMsgCrypt(self._token, self._aes_key, self._corp_id, channel=WxChannel_Wecom)
