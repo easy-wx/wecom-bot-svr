@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wecom-bot-svr"
-version = "0.3.3dev2"
+version = "0.3.3"
 authors = [
     { name = "panzhongxian", email = "panzhongxian0532@gmail.com" },
 ]
