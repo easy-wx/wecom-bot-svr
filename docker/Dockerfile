@@ -3,5 +3,5 @@ ENV BASE=/data/code/
 RUN mkdir -p $BASE
 
 RUN apt-get update && apt-get install --yes python3 python3-pip 
-RUN pip3 install wecom-bot-svr==0.2.1
+RUN pip3 install wecom-bot-svr==0.3.3
 
