@@ -4,6 +4,9 @@
 
 - 2024-12-09 新增发送主动文件功能(可以由消息触发)
 - 2025-02-08 新增主动发送消息服务(本地网络POST触发)
+- 2026-03-24 新增返回消息类型，默认支持高延迟回复消息，支持生成器多条消息回复(生成器形式，受限于限频，4条内比较保险)
+
+![delay_and_multiple_msg](https://github.com/easy-wx/wecom-bot-svr/raw/main/images/delay_and_multiple_msg.png)
 
 ## 1. 介绍
 
@@ -89,18 +92,26 @@ server = app.WecomBotServer(bot_name, host, port, path='/wecom_bot')
 
 只要你看懂了 demo.py 里边做了什么工作，就可以修改他，实现自己机器人的回复逻辑了。
 
-- `msg_handler`: 消息处理函数，简单的实现了 help 和普通消息的回复功能
+- `msg_handler`: 消息处理函数。除 help 与默认回显外，演示了**高延迟单条回复**、**生成器多条回复**、**多类型主动消息**等用法（见下）
 - `event_handler`: 事件处理函数，简单的实现了加入群聊的事件触发消息发送的功能
 - `WecomBotServer`: 企业微信机器人回调服务的接口服务，实现了加解密的功能，运行后能拉起 HTTP 服务
 - 通过`set_message_handler`和`set_event_handler`将消息处理函数和事件处理函数注册到服务中
 
+### demo 中文本指令（群聊 @ 机器人后发送）
+
+- `help`：Markdown 帮助（含下列指令说明）
+- `sleep N`：在 handler 内休眠 N 秒再回复一条文本（演示超过同步回包等待时间时的超时与主动推送行为，具体以 `WecomBotServer` 实现为准）
+- `repeat N`：返回**生成器**，连续推送 N 条文本（`msg 1/N` … `msg N/N`）
+- `full_media_test`：返回**生成器**，依次推送 **text → markdown → file → news**：其中文件写入当前目录下的 `full_media_test_4-3.txt`，内容与 `give me a file` 示例文案一致；各步之间有短暂 `sleep`，便于观察顺序
+- `give me a file`：写 `output.txt` 并调用 `server.send_file` 发文件，同步回包为空的 `RspTextMsg()`（与生成器路径对照时，注意主动推送条数对企业微信频控的影响）
+
 ### 消息格式说明
 
-`msg_handler(req_msg) -> rsp_msg`：消息处理函数将接收一个请求消息对象，返回一个响应消息对象。
+`msg_handler(req_msg, server) -> rsp_msg | Generator`：第二个参数为 `WecomBotServer` 实例，便于在 handler 内调用 `send_file` 等能力；返回值可以是**单个**响应消息对象，也可以是 **generator**，逐条 `yield` 多个 `Rsp*`；生成器时**第一条**通常作为同步加密回包，**后续条**由框架通过 webhook 主动发送（详见库内 `_dispatch_message_handler_with_timeout` / `_handle_message_handler_generator`）。
 
 所有机器人接收到的消息和事件，罗列在 req_msg.py 中，会作为 msg_handler 的输入，已经提取到具体的格式，用户可以根据自己的需求使用。
 
-机器人发送消息只有两种形式，一种是 Text，另外一种是 Markdown，定义在 rsp_msg.py 文件当中。两种消息都只需要填写 content 内容即可。
+机器人侧响应类型定义在 rsp_msg.py 中，除 Text、Markdown 外，还包括 **File**（`file_path` / `media_id`）、**Image**（`base64_image_data` + `md5`）、**News**（标题、描述、链接、配图 URL 等）。demo 中 `full_media_test` 覆盖了 text、markdown、file、news；需要图片类型时可参考文件中预留的 1×1 PNG 常量扩展。
 
 ## 5. 发送文件
 
