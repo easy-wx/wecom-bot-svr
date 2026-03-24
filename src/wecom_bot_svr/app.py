@@ -1,6 +1,8 @@
 import inspect
 import logging
 import os
+import queue
+import threading
 import xml.etree.cElementTree as ET
 
 import requests
@@ -8,6 +10,7 @@ from flask import Flask, request
 from wx_crypt import WXBizMsgCrypt, WxChannel_Wecom
 
 from .req_msg import ReqMsg
+from .rsp_msg import RspTextMsg, rsp_msg_from_active_params
 
 
 # 参考文档：https://km.woa.com/articles/show/387107?kmref=search&from_page=1&no=2#10128
@@ -31,6 +34,9 @@ def _encode_rsp(wx_cpt, rsp_str):
 
 
 class WecomBotServer(object):
+    """_message_handler 在后台线程执行；同步回包最多等待 FIRST_HANDLER_RSP_TIMEOUT_SEC 秒（含「等 handler 返回」与「生成器首条 yield」）。超时则空回包，结果改为主动推送。注意 handler 内勿依赖 Flask 的 request 线程局部变量。"""
+    FIRST_HANDLER_RSP_TIMEOUT_SEC = 4
+
     def __init__(self, name, host, port, path, token=None, aes_key=None, corp_id=None, bot_key=None,
                  active_msg_path="/active_send"):
         """
@@ -86,33 +92,112 @@ class WecomBotServer(object):
         if request.remote_addr != "127.0.0.1":
             return "Invalid request"
 
-        # 获取请求参数
-        params = request.values
-        msg_type = params.get("msg_type")
-        chat_id = params.get("chat_id")
-        if msg_type == "file":
-            file_path = params.get("file_path")
-            send_ret = self.send_file(chat_id, file_path)
-        elif msg_type == "markdown":
-            content = params.get("content")
-            send_ret = self.send_markdown(chat_id, content)
-        elif msg_type == "text":
-            content = params.get("content")
-            send_ret = self.send_text(chat_id, content)
-        elif msg_type == "image":
-            base64_image_data = params.get("base64_image_data")
-            md5 = params.get("md5")
-            send_ret = self.send_encoded_image(chat_id, base64_image_data, md5)
-        elif msg_type == "news":
-            title = params.get("title")
-            description = params.get("description")
-            url = params.get("url")
-            pic_url = params.get("pic_url")
-            send_ret = self.send_news(chat_id, title, description, url, pic_url)
-        else:
+        p = request.values
+        rsp = rsp_msg_from_active_params(p)
+        if rsp is None:
             return "Invalid msg_type"
-
+        send_ret = self.send_active_message(p.get("chat_id"), rsp)
         return "发送消息结果：" + send_ret
+
+    def send_active_message(self, chat_id, rsp_msg):
+        """按 Rsp* 主动发送，与 handler 返回类型一致。"""
+        if not chat_id:
+            return "缺少 chat_id"
+        if rsp_msg is None:
+            return "缺少消息"
+        mt = rsp_msg.msg_type
+        if mt == "file":
+            if rsp_msg.file_path:
+                return self.send_file(chat_id, rsp_msg.file_path)
+            if rsp_msg.media_id:
+                return self.proactively_send(chat_id, "file", "文件", {"file": {"media_id": rsp_msg.media_id}})
+            return "文件消息缺少 file_path 或 media_id"
+        if mt == "markdown":
+            body = rsp_msg.content if rsp_msg.content is not None else ""
+            return self.send_markdown(chat_id, body)
+        if mt == "text":
+            text = rsp_msg.content if rsp_msg.content is not None else ""
+            return self.send_text(
+                chat_id,
+                text,
+                mentioned_list=rsp_msg.mentioned_list,
+                mentioned_mobile_list=rsp_msg.mentioned_mobile_list,
+            )
+        if mt == "image":
+            return self.send_encoded_image(
+                chat_id,
+                rsp_msg.base64_image_data,
+                rsp_msg.md5,
+            )
+        if mt == "news":
+            return self.send_news(
+                chat_id,
+                rsp_msg.title,
+                rsp_msg.description,
+                rsp_msg.url,
+                rsp_msg.pic_url,
+            )
+        return "Invalid msg_type"
+
+    def _empty_sync_rsp(self):
+        r = RspTextMsg()
+        r.content = ""
+        return r
+
+    def _dispatch_message_handler_with_timeout(self, msg):
+        """在后台执行 _message_handler，首包（返回体或生成器首条）超过 FIRST_HANDLER_RSP_TIMEOUT_SEC 则空回包并改主动推送。"""
+        chat_id = msg.chat_id
+        out = queue.Queue(maxsize=1)
+
+        def worker():
+            try:
+                if len(inspect.signature(self._message_handler).parameters) == 2:
+                    raw = self._message_handler(msg, self)
+                else:
+                    raw = self._message_handler(msg)
+                out.put((True, raw))
+            except Exception:
+                self.logger.exception("message handler failed")
+                out.put((False, None))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+        try:
+            ok, raw = out.get(timeout=self.FIRST_HANDLER_RSP_TIMEOUT_SEC)
+        except queue.Empty:
+
+            def on_late():
+                ok_late, raw_late = out.get()
+                if not ok_late:
+                    return
+                if inspect.isgenerator(raw_late):
+                    try:
+                        for item in raw_late:
+                            if item is None:
+                                continue
+                            send_ret = self.send_active_message(chat_id, item)
+                            if send_ret == "Invalid msg_type":
+                                self.logger.warning(
+                                    "send_active_message: unsupported msg_type %s",
+                                    item.msg_type)
+                    except Exception:
+                        self.logger.exception("message handler generator failed")
+                else:
+                    self.send_active_message(chat_id, raw_late)
+
+            threading.Thread(target=on_late, daemon=True).start()
+            return self._empty_sync_rsp()
+
+        if not ok:
+            return self._empty_sync_rsp()
+
+        if inspect.isgenerator(raw):
+            self.logger.info(
+                "_dispatch_message_handler_with_timeout: handler returned generator, chat_id=%s",
+                chat_id,
+            )
+            return self._handle_message_handler_generator(msg, raw)
+        return raw
 
     def get_crypto_obj(self):
         return WXBizMsgCrypt(self._token, self._aes_key, self._corp_id, channel=WxChannel_Wecom)
@@ -156,16 +241,98 @@ class WecomBotServer(object):
         else:  # 消息
             if msg.msg_type == 'text' and msg.chat_type == 'group':
                 msg.content = msg.content.replace(f"@{self.name}", "")
-            if len(inspect.signature(self._message_handler).parameters) == 2:
-                rsp_msg = self._message_handler(msg, self)
-            else:  # 兼容旧版本
-                rsp_msg = self._message_handler(msg)
+            rsp_msg = self._dispatch_message_handler_with_timeout(msg)
 
         nonce = params.get("nonce")
         ret, rsp = wx_cpt.EncryptMsg(rsp_msg.dump_xml(), nonce, timestamp)
         if ret != 0:
             print("err: encrypt fail: " + str(ret))
         return rsp
+
+    def _handle_message_handler_generator(self, msg, gen):
+        chat_id = msg.chat_id
+        q = queue.Queue()
+        done = object()
+
+        def producer():
+            put_idx = 0
+            try:
+                for rsp in gen:
+                    put_idx += 1
+                    c = getattr(rsp, "content", None)
+                    self.logger.info(
+                        "generator producer put #%s chat_id=%s content=%r",
+                        put_idx,
+                        chat_id,
+                        c,
+                    )
+                    q.put(rsp)
+            except Exception:
+                self.logger.exception(
+                    "message handler generator failed after %s puts", put_idx
+                )
+            finally:
+                self.logger.info(
+                    "generator producer finally: sentinel done after %s item(s)", put_idx
+                )
+                q.put(done)
+
+        def drain():
+            send_idx = 0
+            while True:
+                item = q.get()
+                if item is done:
+                    self.logger.info(
+                        "generator drain: got sentinel, send_active_message calls=%s",
+                        send_idx,
+                    )
+                    break
+                if item is not None:
+                    send_idx += 1
+                    c = getattr(item, "content", None)
+                    self.logger.info(
+                        "generator drain send_active_message #%s chat_id=%s content=%r",
+                        send_idx,
+                        chat_id,
+                        c,
+                    )
+                    send_ret = self.send_active_message(chat_id, item)
+                    self.logger.info(
+                        "generator drain send_active_message #%s result=%r", send_idx, send_ret
+                    )
+                    if send_ret == "Invalid msg_type":
+                        self.logger.warning(
+                            "send_active_message: unsupported msg_type %s", item.msg_type)
+
+        threading.Thread(target=producer, daemon=True).start()
+
+        try:
+            first = q.get(timeout=self.FIRST_HANDLER_RSP_TIMEOUT_SEC)
+        except queue.Empty:
+            first = None
+
+        if first is None:
+            self.logger.info(
+                "generator first wait: timeout (>%ss), empty sync rsp + drain all via proactive",
+                self.FIRST_HANDLER_RSP_TIMEOUT_SEC,
+            )
+            threading.Thread(target=drain, daemon=True).start()
+            return self._empty_sync_rsp()
+        if first is done:
+            self.logger.info("generator first wait: empty generator (done sentinel)")
+            return self._empty_sync_rsp()
+        if first.msg_type == 'file':
+            send_ret = self.send_file(chat_id, first.file_path)
+            if send_ret == "上传文件失败":
+                return self._empty_sync_rsp()
+            return self._empty_sync_rsp()
+
+        self.logger.info(
+            "generator first wait: sync reply content=%r, drain rest via proactive",
+            getattr(first, "content", None),
+        )
+        threading.Thread(target=drain, daemon=True).start()
+        return first
 
     def upload_file(self, file_path):
         filename = os.path.basename(file_path)
@@ -194,18 +361,26 @@ class WecomBotServer(object):
 
             r = requests.post(url=f'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={self._bot_key}',
                               json=payload)
+
             if r.status_code == 200 and r.json().get("errcode") == 0:
                 return f"发送{msg_type_name}成功"
-            else:
-                return f"发送{msg_type_name}失败"
-        except:
+            self.logger.warning(
+                "proactively_send %s failed status=%s body=%s, payload=%s",
+                msg_type_name,
+                r.status_code,
+                r.text[:500] if r.text else "",
+                payload,
+            )
+            return f"发送{msg_type_name}失败"
+        except Exception:
+            self.logger.exception("proactively_send %s exception", msg_type_name)
             return f"发送{msg_type_name}失败"
 
     def send_file(self, chat_id, file_path):
         media_id = self.upload_file(file_path)
         if media_id is None:
             return "上传文件失败"
-
+        self.logger.info(f"上传文件成功 media_id={media_id}")
         return self.proactively_send(chat_id, "file", "文件", {"file": {"media_id": media_id}})
 
     def send_markdown(self, chat_id, content):
